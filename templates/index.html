@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sketch2Painting with Gemini</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background-color: #f4f4f4; min-height: 100vh; box-sizing: border-box; }
+        h1 { color: #333; text-align: center; margin-bottom: 25px; }
+        h2 { margin-top: 0; margin-bottom: 15px; text-align: center; font-size: 1.2em; color: #444; }
+
+        .attribution {
+            text-align: center;
+            font-size: 1.2em;
+            color: #667;
+            margin-top: -15px; /* Adjust spacing below h1 */
+            margin-bottom: 25px;
+        }
+        .attribution .heart {
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .attribution .dev-logo-img {
+            display: inline-block;
+            width: 1.5em; 
+            height: auto;     
+            vertical-align: middle; 
+            margin: 0 0.2em;   
+            position: relative;
+            top: -0.1em;       
+        }
+
+        .main-container { display: flex; justify-content: space-around; align-items: flex-start; width: 95%; max-width: 1100px; gap: 30px; margin-top: 20px; flex-wrap: wrap; }
+
+        .sketch-area, .output-container { display: flex; flex-direction: column; align-items: center; width: auto; flex-basis: 500px; flex-grow: 0; box-sizing: border-box; }
+
+        .canvas-wrapper, .output-image-wrapper { width: 500px; height: 500px; border: 1px solid #ccc; background-color: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+
+        canvas { display: block; cursor: crosshair; touch-action: none; background-color: #fff; }
+        canvas.erase-mode { cursor: cell; }
+        .output-image-wrapper img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center center; }
+        .output-image-wrapper .placeholder, .output-image-wrapper .output-error { color: #888; text-align: center; padding: 20px; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+        .output-image-wrapper .output-error { color: red; font-weight: bold; word-break: break-word; }
+
+        .canvas-controls-container { display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 25px; /* Space below main container */ margin-bottom: 15px; /* Space above prompt */ flex-wrap: wrap; padding: 10px; background-color: #e9e9e9; border-radius: 5px; width: auto; max-width: 90%; }
+        .canvas-controls-container button { padding: 8px 12px; font-size: 0.9em; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background-color: #f8f8f8; transition: background-color 0.2s, border-color 0.2s; }
+        .canvas-controls-container button:hover { background-color: #e0e0e0; border-color: #bbb; }
+        .canvas-controls-container button.active-tool { background-color: #d0e7ff; border-color: #007bff; font-weight: bold; }
+        label[for="colorPicker"] { font-size: 0.9em; margin-left: 5px; color: #555; }
+        #colorPicker { width: 40px; height: 30px; border: 1px solid #ccc; padding: 2px; border-radius: 4px; cursor: pointer; background-color: #fff; vertical-align: middle; }
+        #colorPicker::-webkit-color-swatch-wrapper { padding: 0; }
+        #colorPicker::-webkit-color-swatch { border: none; border-radius: 3px;}
+        #colorPicker::-moz-color-swatch { border: none; border-radius: 3px;}
+
+        .prompt-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 800px; 
+            margin-bottom: 15px; 
+        }
+        .prompt-container label {
+            font-size: 0.95em;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        #promptInput {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #000000;
+            border-radius: 8px;
+            font-size: 1.2em;
+            min-height: 40px; 
+            resize: vertical;
+            line-height: 1.4;
+            box-sizing: border-box;
+        }
+
+        .action-buttons { display: flex; justify-content: center; gap: 15px; width: 100%; margin-top: 0; }
+        .action-buttons button { padding: 12px 20px; font-size: 1.1em; cursor: pointer; border: none; border-radius: 5px; color: white; transition: background-color 0.2s; min-width: 120px; }
+        .action-buttons button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        #generateBtn { background-color: #007bff; }
+        #generateBtn:hover:not(:disabled) { background-color: #0056b3; }
+        #clearBtn { background-color: #dc3545; }
+        #clearBtn:hover:not(:disabled) { background-color: #c82333; }
+
+        .status-area { margin-top: 20px; font-weight: bold; min-height: 1.2em; text-align: center; width: 100%; padding-bottom: 20px; }
+        .status-area.error { color: red; }
+        .status-area.loading { color: #0056b3; }
+
+        @media (max-width: 1100px) {
+             .main-container { flex-direction: column; align-items: center; width: 95%; max-width: none; }
+             .sketch-area { margin-bottom: 30px; }
+             .sketch-area, .output-container { flex-basis: auto; width: 90%; max-width: 500px; }
+             .canvas-wrapper, .output-image-wrapper { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+             canvas { width: 100%; height: 100%; }
+             .output-image-wrapper img { width: 100%; height: 100%; }
+             .prompt-container { max-width: 90%; } 
+         }
+         @media (max-width: 550px) {
+              .sketch-area, .output-container { width: 95%; }
+              .action-buttons button { font-size: 1em; padding: 10px 15px; }
+              .canvas-controls-container { gap: 10px; }
+         }
+
+    </style>
+</head>
+<body>
+    <h1>Sketch2Paint with Gemini</h1> 
+    <h3 class="attribution">
+        Made with <span class="heart">🧡</span> by
+        <img src="{{ url_for('static', filename='images/dev-logo.png') }}" alt="Google Developers logo" class="dev-logo-img">
+        Nitin Tiwari
+    </h2>
+  
+    <div class="main-container">
+        <div class="sketch-area">
+            <h2>Your Sketch</h2>
+            <div class="canvas-wrapper">
+                <canvas id="sketchCanvas" width="500" height="500"></canvas>
+            </div>
+        </div>
+        <div class="output-container">
+             <h2>Generated Painting</h2>
+             <div id="outputWrapper" class="output-image-wrapper">
+                 <img id="outputImage" src="" alt="Generated Painting" style="display: none;">
+                 <div id="outputPlaceholder" class="placeholder">Painting will appear here...</div>
+                 <div id="outputError" class="output-error" style="display: none;"></div>
+             </div>
+        </div>
+    </div>
+
+    <div class="canvas-controls-container">
+        <button id="drawBtn" class="active-tool">Draw</button>
+        <button id="eraseBtn">Erase</button>
+        <label for="colorPicker">Color:</label>
+        <input type="color" id="colorPicker" value="#000000">
+    </div>
+
+    <div class="prompt-container">
+        <textarea id="promptInput" rows="1" placeholder="Optional prompt: E.g: impressionist oil painting, watercolor sketch, cartoon style, etc."></textarea>
+    </div>
+
+     <div class="action-buttons">
+         <button id="clearBtn">Clear Sketch & Prompt</button> 
+         <button id="generateBtn">Generate Painting</button>
+     </div>
+
+
+    <div id="status" class="status-area"></div>
+
+    <script>
+        const promptInput = document.getElementById('promptInput'); 
+        const canvas = document.getElementById('sketchCanvas');
+        const ctx = canvas.getContext('2d');
+        const clearBtn = document.getElementById('clearBtn');
+        const generateBtn = document.getElementById('generateBtn');
+        const eraseBtn = document.getElementById('eraseBtn');
+        const drawBtn = document.getElementById('drawBtn');
+        const colorPicker = document.getElementById('colorPicker');
+        const outputWrapper = document.getElementById('outputWrapper');
+        const outputImage = document.getElementById('outputImage');
+        const outputPlaceholder = document.getElementById('outputPlaceholder');
+        const outputError = document.getElementById('outputError');
+        const statusDiv = document.getElementById('status');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let currentMode = 'draw';
+        let drawColor = '#000000';
+        const drawLineWidth = 3;
+        const eraseLineWidth = 15;
+
+        function initializeCanvas() {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawColor = '#000000';
+            colorPicker.value = '#000000';
+            setDrawMode(); 
+            outputImage.style.display = 'none';
+            outputPlaceholder.style.display = 'flex';
+            outputPlaceholder.textContent = 'Painting will appear here...';
+            outputError.style.display = 'none';
+            statusDiv.textContent = '';
+            statusDiv.className = 'status-area';
+            generateBtn.disabled = false;
+            clearBtn.disabled = false;
+            eraseBtn.disabled = false;
+            drawBtn.disabled = false;
+            colorPicker.disabled = false;
+            promptInput.value = '';        
+            promptInput.disabled = false; 
+        }
+
+        function setDrawMode() { currentMode = 'draw'; ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = drawColor; ctx.lineWidth = drawLineWidth; canvas.classList.remove('erase-mode'); drawBtn.classList.add('active-tool'); eraseBtn.classList.remove('active-tool'); }
+        function setEraseMode() { currentMode = 'erase'; ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = eraseLineWidth; canvas.classList.add('erase-mode'); eraseBtn.classList.add('active-tool'); drawBtn.classList.remove('active-tool'); }
+        function getPos(evt) { const rect = canvas.getBoundingClientRect(); const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX; const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY; return { x: clientX - rect.left, y: clientY - rect.top }; }
+        function startDrawing(e) { if (e.touches) e.preventDefault(); isDrawing = true; const pos = getPos(e); [lastX, lastY] = [pos.x, pos.y]; ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.fillStyle = (currentMode === 'draw') ? ctx.strokeStyle : 'rgba(0,0,0,1)'; 
+
+            ctx.arc(lastX, lastY, ctx.lineWidth / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath(); 
+            ctx.moveTo(lastX, lastY);
+        }
+        function draw(e) { if (!isDrawing) return; if (e.touches) e.preventDefault(); const pos = getPos(e); ctx.lineTo(pos.x, pos.y); ctx.stroke(); [lastX, lastY] = [pos.x, pos.y]; }
+        function stopDrawing() { if (isDrawing) { isDrawing = false; ctx.beginPath();  } }
+
+        canvas.addEventListener('mousedown', startDrawing); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stopDrawing); canvas.addEventListener('mouseout', stopDrawing);
+        canvas.addEventListener('touchstart', startDrawing, { passive: false }); canvas.addEventListener('touchmove', draw, { passive: false }); canvas.addEventListener('touchend', stopDrawing); canvas.addEventListener('touchcancel', stopDrawing);
+        clearBtn.addEventListener('click', () => { initializeCanvas(); }); // Clears canvas and prompt
+        drawBtn.addEventListener('click', setDrawMode); eraseBtn.addEventListener('click', setEraseMode);
+        colorPicker.addEventListener('input', (event) => { drawColor = event.target.value; if (currentMode === 'draw') { ctx.strokeStyle = drawColor; } setDrawMode(); }); // Switch back to draw mode on color change
+
+        generateBtn.addEventListener('click', async () => {
+            // Disable controls
+            generateBtn.disabled = true; clearBtn.disabled = true; eraseBtn.disabled = true;
+            drawBtn.disabled = true; colorPicker.disabled = true; promptInput.disabled = true; // Disable prompt input
+
+            statusDiv.textContent = 'Generating painting... please wait.'; statusDiv.className = 'status-area loading';
+            outputImage.style.display = 'none'; outputError.style.display = 'none';
+            outputPlaceholder.style.display = 'flex'; outputPlaceholder.textContent = 'Generating...';
+
+            const imageDataUrl = canvas.toDataURL('image/png');
+
+            // Get prompt.
+            const userPrompt = promptInput.value.trim(); // Get value and remove leading/trailing whitespace
+
+            // Prepare JSON payload.
+            const payload = {
+                image_data: imageDataUrl
+                // Conditionally add the prompt property ONLY if userPrompt is not empty
+                // If userPrompt is empty, the 'prompt' key won't be sent.
+            };
+            if (userPrompt) {
+                payload.prompt = userPrompt;
+            }
+
+            console.log("Sending payload:", JSON.stringify(payload)); // Log payload for debugging
+
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', },
+                    body: JSON.stringify(payload), // Send the payload
+                });
+                const result = await response.json();
+                if (response.ok && result.generated_image) {
+                    outputImage.src = result.generated_image; outputImage.style.display = 'block';
+                    outputPlaceholder.style.display = 'none'; outputError.style.display = 'none';
+                    statusDiv.textContent = 'Painting generated successfully.'; statusDiv.className = 'status-area';
+                } else {
+                    // Use error message from backend JSON if available, otherwise use status text.
+                    const errorMsg = result.error || response.statusText || `Failed with status ${response.status}`;
+                    console.error('Generation failed:', errorMsg);
+                    statusDiv.textContent = `Error: ${errorMsg}`; statusDiv.className = 'status-area error';
+                    outputError.textContent = `Generation Failed: ${errorMsg}`; outputError.style.display = 'flex';
+                    outputPlaceholder.style.display = 'none'; outputImage.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Network or fetch error:', error);
+                const errorText = `Network error or failed to fetch: ${error.message || String(error)}`;
+                statusDiv.textContent = `Error: ${errorText}`; statusDiv.className = 'status-area error';
+                outputError.textContent = `Error: ${errorText}`; outputError.style.display = 'flex';
+                outputPlaceholder.style.display = 'none'; outputImage.style.display = 'none';
+            } finally {
+                // Re-enable controls.
+                generateBtn.disabled = false; clearBtn.disabled = false; eraseBtn.disabled = false;
+                drawBtn.disabled = false; colorPicker.disabled = false; promptInput.disabled = false; // Enable prompt input
+            }
+        });
+
+        // Initialize on load.
+        window.onload = initializeCanvas;
+    </script>
+
+</body>
+</html>
