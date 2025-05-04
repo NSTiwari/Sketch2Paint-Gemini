@@ -10,4 +10,4 @@ This repository is an implementation of converting hand-drawn sketches to creati
 5. Open `localhost:5000` on your web browser and start inferencing with PaliGemma 2.
 
 ## Results:
-<img src="https://github.com/NSTiwari/Sketch2Paint-Gemini/blob/main/assets/sketch2paint.gif"/>
+<img src="https://github.com/NSTiwari/Sketch2Paint-Gemini/blob/main/static/images/sketch2paint.gif"/>
